@@ -1,6 +1,6 @@
 # ccd-testing-tools
 
-Tools for CCD analysis.
+Tools for CCD analysis. Updated for testing CCD to be deployed in the DAMIC at SNOLAB upgrade experiment. 
 
 ## CTI.py   
 
