@@ -16,6 +16,7 @@ import sys
 import matplotlib.pyplot as plt
 import time
 import datetime
+import argparse
 
 
 ###Create array of the data from FITS file
@@ -42,73 +43,81 @@ def flatten_files(fitsfiles):
 ###all files. Creates arrays populated with median
 ###and median after omitting outliers and saves to .txt
 #########################################################
-def median_imgs(flatfiles, width, height):
+def median_imgs(flatfiles, width, height, outdir):
     n_files, file_length = flatfiles.shape
 
 
-    median_img = np.zeros(file_length)
-    median_sans_outliers = np.zeros(file_length)
-    for cell in range(file_length):
+    # Vectorized version
+
+    print("Make median image")
+    medpix = np.median(flatfiles, axis=0)
+    stdpix = np.std(flatfiles, axis=0)
+
+    goodpixels = np.logical_and( flatfiles > (medpix - stdpix), flatfiles < (medpix + stdpix) )
+
+    fullMedian = np.tile(medpix, (n_files, 1))
+    print(np.sum(np.logical_not(goodpixels)))
 
 
-        cells = flatfiles[:,cell:cell+1]   ###cells is a slice of the n_files pixel at index cell
 
-        median = np.median(cells)
-        stddev = np.std(cells)
-        filter_cells = []
+    median_img = medpix
 
-        ###remove outliers from cells
-        for element in cells:
-            if element > median-stddev:
-                if element < median+stddev:
-                    filter_cells.append(True)
-                else: filter_cells.append(False)
-            else:
-                filter_cells.append(False)
-        cells_filtered = cells[filter_cells]
+    print("Make median no outliers image")
+    flatfilesWithoutOutliers = flatfiles
+    flatfilesWithoutOutliers[np.logical_not(goodpixels)] = fullMedian[np.logical_not(goodpixels)]
+    median_sans_outliers = np.median(flatfilesWithoutOutliers, axis=0)
+    # for cell in range(file_length):
 
-        ###fill arrays
-        median_img[cell] = median
-        median_sans_outliers[cell] = np.median(cells_filtered)
 
-        print("{} of {}".format(cell,file_length))
+    #     # cells = flatfiles[:,cell:cell+1]   ###cells is a slice of the n_files pixel at index cell
+
+    #     # median = np.median(cells)
+    #     # stddev = np.std(cells)
+    #     # filter_cells = []
+
+    #     # ###remove outliers from cells
+    #     # for element in cells:
+    #     #     if element > median-stddev:
+    #     #         if element < median+stddev:
+    #     #             filter_cells.append(True)
+    #     #         else: filter_cells.append(False)
+    #     #     else:
+    #     #         filter_cells.append(False)
+    #     # cells_filtered = cells[filter_cells]
+
+    #     # compute median of good cells only
+
+    #     ###fill arrays
+        
+    #     median_sans_outliers[cell] = np.median(flatfiles[goodpixels[:, cell], cell])
+
+    #     print("{} of {}".format(cell,file_length))
 
     median_img = median_img.reshape(width, height)
     median_sans_outliers = median_sans_outliers.reshape(width, height)
-    np.savetxt('median_img.txt', median_img, delimiter=',')
-    np.savetxt('median_sans_outliers.txt', median_sans_outliers, delimiter=',')
+    fits.writeto(os.path.join(outdir, 'median_img.fits'), median_img)
+    fits.writeto(os.path.join(outdir,'median_sans_outliers.fits'), median_sans_outliers,)
     return
 
 
 
 
-def main():
-    if len(sys.argv)<2:
-
-        print("Error: first argument must be a FITS file")
-        exit(1)
-
-    if path.exists(sys.argv[1]):
-        if sys.argv[1].endswith('.fits'):
-            fitsfiles = glob("*.fits")
-            print(fitsfiles)
-        else:
-            print("Enter a valid FITS file")
-            exit(1)
-
-    else:
-        print("Enter a valid FITS file")
-        exit(1)
+def createMedianImages(filenames, outdir):
 
 
     start_time = time.time()
 
 
-    data = get_data(fitsfiles)
-    flatfiles = flatten_files(data)
-    n_files, width, height = data.shape
+    data = get_data(filenames)
 
-    median_imgs(flatfiles,width,height)
+    #flatfiles = flatten_files(data)
+    #n_files, width, height = data.shape
+
+    #median_imgs(flatfiles,width,height, outdir)
+
+
+    medianImage = np.median(data, axis=0)
+    fits.writeto(os.path.join(outdir, "median-image.fits"), medianImage)
 
 
     print(f"time: {datetime.timedelta(seconds=int(time.time() - start_time))}")
@@ -117,7 +126,21 @@ def main():
 
 
 
+
 if __name__ == '__main__':
-    main()
-    import doctest
-    #doctest.testmod()
+
+    parser = argparse.ArgumentParser(description="Plot Skipper Image")
+    parser.add_argument("-f", "--filenames", nargs="*", help="Skipper FITS file to plot")
+    args = parser.parse_args()
+
+
+    # distribute command line args to variables
+    filenames = args.filenames
+
+    outdir = os.path.split(filenames[0])[0]
+
+
+    print(filenames)
+    
+
+    createMedianImages(filenames, outdir)
